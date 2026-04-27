@@ -361,7 +361,7 @@ class AccountMove(models.Model):
             net_untaxed = total - net_taxed - iva_total - tax_exempt
 
         # Variable to identication "MiPyme" fiscal document
-        mi_pyme = int(invoice_info["doc_afip_code"]) in (201, 206, 211)
+        mi_pyme = doc_type_code in (201, 206, 211)
 
         data = {
             "pos_number": journal.l10n_ar_afip_pos_number,
@@ -378,10 +378,9 @@ class AccountMove(models.Model):
             "iva_total": iva_total,
             "iva_lines": iva_lines,
         }
-
-        concept_info_dates = concept in (2, 3)
         
         # Service dates
+        concept_info_dates = concept in (2, 3)
         if concept_info_dates or mi_pyme:
             due_date = self.invoice_date_due or invoice_date
             data["payment_due_date"] = due_date.strftime("%Y%m%d")
