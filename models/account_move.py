@@ -306,7 +306,7 @@ class AccountMove(models.Model):
         partner = self.partner_id.commercial_partner_id
 
         # Determine concept type
-        concept = self._get_arca_concept_type()
+        concept = int(self.l10n_ar_afip_concept)
 
         # Customer document
         customer_doc_type, customer_doc_number = self._get_arca_customer_doc(
@@ -360,6 +360,9 @@ class AccountMove(models.Model):
             # Net untaxed (no gravado)
             net_untaxed = total - net_taxed - iva_total - tax_exempt
 
+        # Variable to identication "MiPyme" fiscal document
+        mi_pyme = int(invoice_info["doc_afip_code"]) in (201, 206, 211)
+
         data = {
             "pos_number": journal.l10n_ar_afip_pos_number,
             "doc_type_code": doc_type_code,
@@ -376,12 +379,15 @@ class AccountMove(models.Model):
             "iva_lines": iva_lines,
         }
 
+        concept_info_dates = concept in (2, 3)
+        
         # Service dates
-        if concept in (2, 3):
-            data["service_date_from"] = date_str
-            data["service_date_to"] = date_str
+        if concept_info_dates or mi_pyme:
             due_date = self.invoice_date_due or invoice_date
             data["payment_due_date"] = due_date.strftime("%Y%m%d")
+            if concept_info_dates:
+                data["service_date_from"] = self.l10n_ar_afip_service_start or date_str
+                data["service_date_to"] = self.l10n_ar_afip_service_end or date_str
 
         # Associated documents (credit/debit notes)
         if self.move_type in ("out_refund", "in_refund"):
@@ -419,25 +425,6 @@ class AccountMove(models.Model):
             data["currency_rate"] = self.currency_id.rate or 1
 
         return data
-
-    def _get_arca_concept_type(self):
-        """Determine ARCA concept type (1=products, 2=services, 3=both)."""
-        self.ensure_one()
-        has_product = any(
-            line.product_id.type == "consu"
-            for line in self.invoice_line_ids
-            if line.product_id
-        )
-        has_service = any(
-            line.product_id.type == "service"
-            for line in self.invoice_line_ids
-            if line.product_id
-        )
-        if has_product and has_service:
-            return 3
-        if has_service:
-            return 2
-        return 1
 
     def _get_arca_customer_doc(self, partner):
         """Get ARCA document type and number for the customer."""
